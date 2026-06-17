@@ -24,3 +24,7 @@ backups/
 # Audit logs (sensitive data)
 logs/
 *.log
+echo serviceAccountKey.json >> .gitignore
+echo *.env >> .gitignore
+echo *serviceAccount*.json >> .gitignore
+echo *firebase*.json >> .gitignore

@@ -11,6 +11,8 @@ const {
     buildRouteMap,
     resolveHrefTarget,
     applyRouteMapToSchema,
+    normalizeImportedHref,
+    basename: routeBasename,
 } = require('../utils/storefrontRouteMap');
 
 /**
@@ -75,9 +77,15 @@ class ManagedStorefrontController {
         try {
             const storefront = await ManagedStorefront.findOne({ storeId: req.storeId });
             if (!storefront || !storefront.draftSchema) {
-                return res.status(200).json({ success: true, data: { pages: [], links: [] } });
+                return res.status(200).json({ success: true, data: { pages: [], links: [], uniqueRoutes: [], stats: {} } });
             }
+            const store = await Store.findById(req.storeId).select('storeSlug');
             const schema = storefront.draftSchema;
+            buildRouteMap(schema);
+            applyRouteMapToSchema(schema, store?.storeSlug || '');
+            storefront.markModified('draftSchema');
+            await storefront.save();
+
             const pages = (schema.pages || []).map(p => ({
                 id: p.id,
                 slug: p.slug || '',
@@ -94,7 +102,31 @@ class ManagedStorefrontController {
                 storivaMapped: l.storivaMapped || false,
                 storivaRoute: l.storivaRoute || ''
             }));
-            res.status(200).json({ success: true, data: { pages, links } });
+            const uniqueRoutes = (schema.routeMap || [])
+                .filter(r => r.id && String(r.id).startsWith('link_'))
+                .map(r => ({
+                    originalHref: r.originalHref,
+                    normalizedPath: r.normalizedPath,
+                    storivaRoute: r.storivaRoute || '',
+                    label: r.label || r.originalHref,
+                    usedOnPages: r.usedOnPages || 1,
+                    status: r.status || (r.storviaRoute ? 'active' : 'unmapped'),
+                }));
+            const mappedLinks = links.filter(l => l.storivaRoute).length;
+            res.status(200).json({
+                success: true,
+                data: {
+                    pages,
+                    links,
+                    uniqueRoutes,
+                    stats: {
+                        pageCount: pages.length,
+                        totalLinks: links.length,
+                        mappedLinks,
+                        uniqueDestinations: uniqueRoutes.length,
+                    },
+                },
+            });
         } catch (error) {
             res.status(500).json({ success: false, message: error.message });
         }
@@ -105,25 +137,50 @@ class ManagedStorefrontController {
      */
     async updateLinks(req, res) {
         try {
-            const { pageMappings = [], linkMappings = [] } = req.body;
+            const { pageMappings = [], linkMappings = [], routeMappings = [] } = req.body;
             const storefront = await ManagedStorefront.findOne({ storeId: req.storeId });
             if (!storefront || !storefront.draftSchema) {
                 return res.status(404).json({ success: false, message: 'No draft schema found' });
             }
             const schema = storefront.draftSchema;
+
+            const applyRouteToHref = (href, route) => {
+                const normalized = normalizeImportedHref(href);
+                const base = routeBasename(normalized).toLowerCase();
+                for (const page of schema.pages || []) {
+                    const file = page.fileName || (page.id === 'home' ? 'index.html' : `${page.id}.html`);
+                    const pageBase = routeBasename(file).toLowerCase();
+                    if (page.id === base.replace(/\.html$/, '') || pageBase === base || file === normalized) {
+                        page.storivaRoute = route;
+                    }
+                }
+                for (const link of schema.pageLinks || []) {
+                    const linkHref = normalizeImportedHref(link.originalHref || link.toPage);
+                    const linkBase = routeBasename(linkHref).toLowerCase();
+                    if (linkHref === normalized || linkBase === base) {
+                        link.storviaRoute = route;
+                        link.storviaMapped = Boolean(route);
+                    }
+                }
+            };
+
             for (const pm of pageMappings) {
                 const page = (schema.pages || []).find(p => p.id === pm.pageId);
-                if (page) page.storivaRoute = pm.storivaRoute;
+                if (page) applyRouteToHref(page.fileName || page.id, pm.storivaRoute);
+            }
+            for (const rm of routeMappings) {
+                if (rm.originalHref) applyRouteToHref(rm.originalHref, rm.storivaRoute);
             }
             for (const lm of linkMappings) {
-                const link = (schema.pageLinks || []).find(l =>
-                    l.fromPage === lm.fromPage && l.toPage === lm.toPage);
-                if (link) { link.storivaMapped = true; link.storivaRoute = lm.storivaRoute; }
+                applyRouteToHref(lm.toPage || lm.originalHref, lm.storivaRoute);
             }
+
+            const store = await Store.findById(req.storeId).select('storeSlug');
             buildRouteMap(schema);
+            applyRouteMapToSchema(schema, store?.storeSlug || '');
             storefront.markModified('draftSchema');
             await storefront.save();
-            res.status(200).json({ success: true, message: 'Link mappings saved.' });
+            res.status(200).json({ success: true, message: 'Route mappings saved.' });
         } catch (error) {
             res.status(500).json({ success: false, message: error.message });
         }
@@ -302,22 +359,68 @@ class ManagedStorefrontController {
             if (!storefront || !storefront.draftSchema?.pages?.length) {
                 return res.status(200).json({ success: true, data: [] });
             }
+            const schema = storefront.draftSchema;
             const images = [];
-            for (const page of storefront.draftSchema.pages) {
-                for (const section of page.sections) {
+            const seen = new Set();
+
+            const pushImage = (entry) => {
+                const key = entry.imageId || entry.originalUrl;
+                if (!key || seen.has(key)) return;
+                seen.add(key);
+                images.push(entry);
+            };
+
+            for (const page of schema.pages) {
+                for (const section of page.sections || []) {
                     for (const img of (section.imageFields || [])) {
-                        images.push({
+                        pushImage({
                             imageId: img.imageId,
                             sectionId: section.id,
                             pageId: page.id,
-                            originalUrl: img.originalUrl,
+                            pageTitle: page.title || page.id,
+                            sectionLabel: section.label || section.id,
+                            originalUrl: img.replacedUrl || img.originalUrl,
                             replacedUrl: img.replacedUrl || null,
                             alt: img.alt || '',
-                            originalName: img.originalName || ''
+                            originalName: img.originalName || img.alt || img.imageId,
+                            isLibraryAsset: false,
+                        });
+                    }
+                    for (const field of (section.editableFields || [])) {
+                        if (field.type !== 'image') continue;
+                        pushImage({
+                            imageId: field.key,
+                            sectionId: section.id,
+                            pageId: page.id,
+                            pageTitle: page.title || page.id,
+                            sectionLabel: section.label || section.id,
+                            originalUrl: field.value,
+                            replacedUrl: field.replacedUrl || null,
+                            alt: field.alt || '',
+                            originalName: field.label || field.key,
+                            isLibraryAsset: false,
                         });
                     }
                 }
             }
+
+            for (const asset of (schema.assets || [])) {
+                if (asset.assetType && asset.assetType !== 'image') continue;
+                if (!asset.safeUrl) continue;
+                pushImage({
+                    imageId: `asset_${asset.hash || asset.id}`,
+                    sectionId: '',
+                    pageId: '_assets',
+                    pageTitle: 'Design Assets',
+                    sectionLabel: asset.originalName,
+                    originalUrl: asset.safeUrl,
+                    replacedUrl: null,
+                    alt: asset.originalName,
+                    originalName: asset.originalName,
+                    isLibraryAsset: true,
+                });
+            }
+
             res.status(200).json({ success: true, data: images });
         } catch (error) {
             res.status(500).json({ success: false, message: error.message });
@@ -336,6 +439,8 @@ class ManagedStorefrontController {
             // Handle file upload to local disk or resolve URL from body
             let newUrl = req.body.imageUrl || null;
             if (req.file) {
+                const store = await Store.findById(req.storeId).select('storeSlug');
+                const assetKey = store?.storeSlug || req.storeId.toString();
                 // Save to imports directory and register as asset
                 const importId = storefront.designImportId?.toString() || 'replacements';
                 const ext = path.extname(req.file.originalname).toLowerCase() || '.jpg';
@@ -345,7 +450,7 @@ class ManagedStorefrontController {
                 const fileName = `${hash}${ext}`;
                 const filePath = path.join(saveDir, fileName);
                 fs.writeFileSync(filePath, req.file.buffer);
-                newUrl = `/api/storefront/${req.storeId}/assets/${hash}${ext}`;
+                newUrl = `/api/storefront/${assetKey}/assets/${hash}${ext}`;
 
                 // Register in StorefrontAsset
                 await StorefrontAsset.findOneAndUpdate(

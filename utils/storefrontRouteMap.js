@@ -15,6 +15,12 @@ const PAGE_TYPE_PATTERNS = [
     { type: 'cart', patterns: [/^cart(\.html)?$/i, /^\/cart$/i] },
     { type: 'checkout', patterns: [/^checkout(\.html)?$/i, /^\/checkout$/i] },
     { type: 'products', patterns: [/^(shop|products|store|collections?)(\.html)?$/i, /^\/products$/i, /^\/shop$/i] },
+    { type: 'track_order', patterns: [/^(track-?order)(\.html)?$/i] },
+    { type: 'faq', patterns: [/^(faq|faqs)(\.html)?$/i] },
+    { type: 'wishlist', patterns: [/^wishlist(\.html)?$/i] },
+    { type: 'account', patterns: [/^account(\.html)?$/i] },
+    { type: 'thank_you', patterns: [/^(thank-?you)(\.html)?$/i] },
+    { type: 'sitemap', patterns: [/^sitemap(\.html)?$/i] },
     { type: 'policy', patterns: [/^(privacy|terms|policy|refund|shipping|return)(-policy)?(\.html)?$/i] },
 ];
 
@@ -50,8 +56,10 @@ function classifyPageType(fileName, title = '') {
     if (titleLower.includes('contact')) return 'contact';
     if (titleLower.includes('cart')) return 'cart';
     if (titleLower.includes('checkout')) return 'checkout';
-    if (titleLower.includes('shop') || titleLower.includes('product')) return 'products';
+    if (titleLower.includes('shop') && !titleLower.includes('workshop')) return 'products';
     if (titleLower.includes('privacy') || titleLower.includes('terms') || titleLower.includes('policy')) return 'policy';
+    if (titleLower.includes('faq')) return 'faq';
+    if (titleLower.includes('track') && titleLower.includes('order')) return 'track_order';
     return 'custom';
 }
 
@@ -69,6 +77,12 @@ function storviaRouteForPageType(pageType, pageSlug) {
         case 'cart': return '/cart';
         case 'checkout': return '/checkout';
         case 'products': return '/products';
+        case 'track_order': return '/order-tracking';
+        case 'faq': return pageSlug ? `/pages/${pageSlug}` : '/pages/faq';
+        case 'wishlist': return pageSlug ? `/pages/${pageSlug}` : '/pages/wishlist';
+        case 'account': return pageSlug ? `/pages/${pageSlug}` : '/pages/account';
+        case 'thank_you': return pageSlug ? `/pages/${pageSlug}` : '/pages/thank-you';
+        case 'sitemap': return pageSlug ? `/pages/${pageSlug}` : '/pages/sitemap';
         case 'policy': return pageSlug ? `/pages/${pageSlug}` : '/pages/policy';
         case 'custom': return pageSlug ? `/pages/${pageSlug}` : '';
         default: return pageSlug ? `/pages/${pageSlug}` : '';
@@ -140,6 +154,20 @@ function resolveHrefTarget(href, pages = []) {
     };
 }
 
+function buildPageRouteLookup(pages = []) {
+    const lookup = new Map();
+    for (const page of pages) {
+        const file = page.fileName || (page.id === 'home' ? 'index.html' : `${page.id}.html`);
+        const base = basename(file);
+        const slug = page.slug ?? pageSlugFromFile(file);
+        const route = page.storviaRoute || '';
+        [file, base, page.id, slug, `${slug}.html`].filter(Boolean).forEach((key) => {
+            lookup.set(String(key).toLowerCase(), route);
+        });
+    }
+    return lookup;
+}
+
 function buildRouteMap(schema) {
     const pages = schema?.pages || [];
     const routeMap = [];
@@ -168,29 +196,51 @@ function buildRouteMap(schema) {
         page.storviaRoute = storviaRoute;
     }
 
+    const pageRouteLookup = buildPageRouteLookup(pages);
+
     for (const link of schema?.pageLinks || []) {
-        const resolved = resolveHrefTarget(link.originalHref || link.toPage, pages);
-        const key = `link:${link.fromPage}->${link.originalHref || link.toPage}`;
+        const href = link.originalHref || link.toPage;
+        const normalized = normalizeImportedHref(href);
+        const base = basename(normalized).toLowerCase();
+        const fromPageRoute = pageRouteLookup.get(base)
+            || pageRouteLookup.get(normalized.toLowerCase());
+        const resolved = resolveHrefTarget(href, pages);
+        const storviaRoute = fromPageRoute || link.storviaRoute || resolved.storviaRoute || '';
+        link.storviaRoute = storviaRoute;
+        link.storviaMapped = Boolean(storviaRoute);
+        link.targetType = resolved.targetType;
+
+        const key = `target:${normalized}`;
         if (seen.has(key)) continue;
         seen.add(key);
-        link.storviaRoute = link.storviaRoute || resolved.storviaRoute;
-        link.storviaMapped = Boolean(link.storviaRoute);
-        link.targetType = resolved.targetType;
         routeMap.push({
             id: `link_${seen.size}`,
-            originalHref: link.originalHref || link.toPage,
+            originalHref: href,
             normalizedPath: resolved.normalizedPath,
             targetType: resolved.targetType,
             targetId: resolved.targetId,
             targetSlug: resolved.targetSlug,
-            storviaRoute: link.storviaRoute,
-            status: link.storviaRoute ? 'active' : resolved.status,
-            fromPage: link.fromPage,
+            storviaRoute,
+            status: storviaRoute ? 'active' : resolved.status,
             label: link.label,
+            usedOnPages: 1,
         });
     }
 
+    // Count how many pages use each unique target
+    const usage = {};
+    for (const link of schema?.pageLinks || []) {
+        const k = normalizeImportedHref(link.originalHref || link.toPage);
+        usage[k] = (usage[k] || 0) + 1;
+    }
+    for (const entry of routeMap) {
+        if (entry.id.startsWith('link_')) {
+            entry.usedOnPages = usage[entry.normalizedPath] || usage[normalizeImportedHref(entry.originalHref)] || 1;
+        }
+    }
+
     schema.routeMap = routeMap;
+    schema.uniqueRoutes = routeMap.filter((r) => r.id.startsWith('link_'));
     return routeMap;
 }
 
@@ -287,6 +337,7 @@ function rewriteAssetUrlsInSchema(schema, storeSlug) {
 
 module.exports = {
     normalizeImportedHref,
+    basename,
     classifyPageType,
     pageSlugFromFile,
     storviaRouteForPageType,
@@ -294,6 +345,7 @@ module.exports = {
     isBlockedPath,
     resolveHrefTarget,
     buildRouteMap,
+    buildPageRouteLookup,
     publicPathForRoute,
     lookupRoute,
     rewriteHtmlLinks,

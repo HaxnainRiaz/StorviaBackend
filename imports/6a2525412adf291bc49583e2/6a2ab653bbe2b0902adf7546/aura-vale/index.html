@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="AURA VALE — Artisanal Botanical Perfumery. Handcrafted botanical elixirs for the modern soul." />
+  <title>AURA VALE — Botanical Elixirs</title>
+
+  <!-- Google Fonts: Cormorant Garamond + Jost (loaded via link, no @import in CSS) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════════
+       ANNOUNCEMENT BAR
+  ═══════════════════════════════════════════ -->
+  <div id="announcement-bar">
+    <p>Complimentary signature sample with every order.&ensp;·&ensp;Free shipping across Pakistan.</p>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       HEADER
+  ═══════════════════════════════════════════ -->
+  <header id="store-header">
+    <div class="header-inner">
+
+      <!-- Logo -->
+      <a href="/" class="logo-link" aria-label="AURA VALE Home">
+        <img class="store-logo" src="images/logo.png" alt="AURA VALE — Botanical Perfumery" />
+        <!-- Inline text fallback rendered beneath image via CSS for when image is absent -->
+        <span class="logo-wordmark" aria-hidden="true">AURA VALE</span>
+      </a>
+
+      <!-- Navigation -->
+      <nav class="store-nav" aria-label="Main navigation">
+        <ul>
+          <li><a href="/">Home</a></li>
+          <li><a href="/collections">Collections</a></li>
+          <li><a href="/about">About</a></li>
+          <li><a href="/contact">Contact</a></li>
+        </ul>
+      </nav>
+
+      <!-- Cart -->
+      <div class="cart-btn-zone">
+        <button class="cart-trigger" type="button" aria-label="Open cart">
+          <svg class="cart-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+            <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
+            <line x1="3" y1="6" x2="21" y2="6"/>
+            <path d="M16 10a4 4 0 0 1-8 0"/>
+          </svg>
+          <span class="cart-badge" aria-label="Items in cart">0</span>
+        </button>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- ═══════════════════════════════════════════
+       HERO SECTION
+  ═══════════════════════════════════════════ -->
+  <section id="hero-section" aria-labelledby="hero-heading">
+    <div class="hero-inner">
+
+      <!-- Left: Text -->
+      <div class="hero-text">
+        <span class="hero-eyebrow">Artisanal Botanical Perfumery</span>
+        <p class="hero-tagline">Bottled Poetry</p>
+        <h1 id="hero-heading" class="hero-heading">Botanical Elixirs<br /><em>for the Modern Soul</em></h1>
+        <p class="hero-desc">
+          Each fragrance is an unhurried act of craft — wild harvested blooms, aged oud, and living jasmine, alchemised into scent stories that linger like beautiful memories.
+        </p>
+        <a href="/collections" class="btn-primary">Discover the Collection</a>
+      </div>
+
+      <!-- Right: Image -->
+      <div class="hero-visual">
+        <div class="hero-image-wrap">
+          <img class="hero-image" src="images/hero-perfume.jpg" alt="A luminous glass bottle of AURA VALE botanical perfume on white stone" />
+        </div>
+        <div class="hero-accent-line" aria-hidden="true"></div>
+        <span class="hero-aside-text" aria-hidden="true">Limited Reserve — 2025</span>
+      </div>
+
+    </div>
+
+    <!-- Decorative divider -->
+    <div class="section-divider" aria-hidden="true">
+      <span class="divider-ornament">❧</span>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════
+       MARQUEE STRIP (CSS-only animation)
+  ═══════════════════════════════════════════ -->
+  <div class="marquee-strip" aria-hidden="true">
+    <div class="marquee-track">
+      <span>Rose Absolute</span><span aria-hidden="true">·</span>
+      <span>Aged Oud</span><span aria-hidden="true">·</span>
+      <span>Wild Jasmine</span><span aria-hidden="true">·</span>
+      <span>Cedarwood</span><span aria-hidden="true">·</span>
+      <span>Bergamot</span><span aria-hidden="true">·</span>
+      <span>Ambergris</span><span aria-hidden="true">·</span>
+      <span>Sandalwood</span><span aria-hidden="true">·</span>
+      <span>Rose Absolute</span><span aria-hidden="true">·</span>
+      <span>Aged Oud</span><span aria-hidden="true">·</span>
+      <span>Wild Jasmine</span><span aria-hidden="true">·</span>
+      <span>Cedarwood</span><span aria-hidden="true">·</span>
+      <span>Bergamot</span><span aria-hidden="true">·</span>
+      <span>Ambergris</span><span aria-hidden="true">·</span>
+      <span>Sandalwood</span><span aria-hidden="true">·</span>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       BRAND STORY & HERITAGE
+  ═══════════════════════════════════════════ -->
+  <section id="brand-story" aria-labelledby="story-heading">
+
+    <div class="story-inner">
+
+      <!-- Image side -->
+      <div class="story-visual">
+        <div class="story-image-frame">
+          <img class="story-image" src="images/craftsmanship.jpg" alt="Artisan hands folding fresh jasmine petals for steam distillation in the AURA VALE atelier" />
+        </div>
+        <blockquote class="story-pull-quote">
+          <p>"Patience is the first ingredient in every great perfume."</p>
+          <cite>— Founder, AURA VALE</cite>
+        </blockquote>
+      </div>
+
+      <!-- Text side -->
+      <div class="story-text">
+        <span class="section-label">Our Craft</span>
+        <h2 id="story-heading" class="story-heading">From Petal<br /><em>to Precious Elixir</em></h2>
+
+        <p class="story-body">
+          In the foothills of rose-valleys and jasmine groves, AURA VALE has pursued a single obsession since its founding — the preservation of nature's most ephemeral beauty in fragrant form.
+        </p>
+
+        <div class="craft-pillars">
+          <div class="craft-pillar">
+            <span class="pillar-icon" aria-hidden="true">✦</span>
+            <h3>Rosa Damascena Oil</h3>
+            <p>Harvested at dawn before the dew lifts, our Bulgarian rose petals are cold-pressed within hours of picking — yielding an oil of extraordinary depth and complexity that mass distillation cannot replicate.</p>
+          </div>
+
+          <div class="craft-pillar">
+            <span class="pillar-icon" aria-hidden="true">✦</span>
+            <h3>Jasmine Night Harvest</h3>
+            <p>True jasmine absolute releases its greatest aromatic intensity after sundown. Our harvest teams work exclusively by moonlight during the three-week flowering season, each bloom hand-selected at peak expression.</p>
+          </div>
+
+          <div class="craft-pillar">
+            <span class="pillar-icon" aria-hidden="true">✦</span>
+            <h3>Aged Oud Maturation</h3>
+            <p>Our oud is sourced from sustainably certified Aquilaria forests and aged in ceramic vessels for a minimum of seven years. Time is the ingredient that cannot be rushed — or replaced.</p>
+          </div>
+        </div>
+
+        <a href="/about" class="btn-ghost">Our Full Story</a>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════
+       PRODUCTS SECTION
+  ═══════════════════════════════════════════ -->
+  <section id="products-section" aria-labelledby="products-heading">
+    <div class="products-header">
+      <span class="section-label">Curated Collection</span>
+      <h2 id="products-heading" class="products-heading">The Reserve</h2>
+      <p class="products-subhead">Each bottle an edition. Each scent a season.</p>
+    </div>
+
+    <!-- Injected by Storvia runtime -->
+    <div class="product-grid-placeholder" aria-label="Product grid — populated by commerce runtime">
+      <!-- STORVIA INJECT: product-grid -->
+
+      <!-- ── Fallback skeleton cards (hidden by runtime after injection) ── -->
+      <div class="product-grid product-grid--skeleton" aria-hidden="true">
+
+        <article class="product-card">
+          <div class="product-card__image-wrap">
+            <img src="images/product-1.jpg" alt="" role="presentation" />
+            <div class="product-card__badge">New</div>
+          </div>
+          <div class="product-card__info">
+            <span class="product-card__collection">Oud Noir Series</span>
+            <h3 class="product-card__name">Velvet Dusk</h3>
+            <div class="product-card__pricing">
+              <span class="product-card__price">PKR 8,500</span>
+            </div>
+            <a href="/products/velvet-dusk" class="product-card__cta">Add to Bag</a>
+          </div>
+        </article>
+
+        <article class="product-card">
+          <div class="product-card__image-wrap">
+            <img src="images/product-2.jpg" alt="" role="presentation" />
+          </div>
+          <div class="product-card__info">
+            <span class="product-card__collection">Rose Reserve</span>
+            <h3 class="product-card__name">Aurore Rose</h3>
+            <div class="product-card__pricing">
+              <span class="product-card__price">PKR 11,200</span>
+            </div>
+            <a href="/products/aurore-rose" class="product-card__cta">Add to Bag</a>
+          </div>
+        </article>
+
+        <article class="product-card">
+          <div class="product-card__image-wrap">
+            <img src="images/product-3.jpg" alt="" role="presentation" />
+            <div class="product-card__badge product-card__badge--limited">Limited</div>
+          </div>
+          <div class="product-card__info">
+            <span class="product-card__collection">Jasmine Nocturne</span>
+            <h3 class="product-card__name">Lune Blanche</h3>
+            <div class="product-card__pricing">
+              <span class="product-card__price">PKR 13,800</span>
+            </div>
+            <a href="/products/lune-blanche" class="product-card__cta">Add to Bag</a>
+          </div>
+        </article>
+
+        <article class="product-card">
+          <div class="product-card__image-wrap">
+            <img src="images/product-4.jpg" alt="" role="presentation" />
+          </div>
+          <div class="product-card__info">
+            <span class="product-card__collection">Cedarwood Collection</span>
+            <h3 class="product-card__name">Forêt Dorée</h3>
+            <div class="product-card__pricing">
+              <span class="product-card__price">PKR 9,400</span>
+            </div>
+            <a href="/products/foret-doree" class="product-card__cta">Add to Bag</a>
+          </div>
+        </article>
+
+      </div>
+      <!-- ── / Fallback skeleton cards ── -->
+    </div>
+
+    <div class="products-footer-cta">
+      <a href="/collections" class="btn-ghost">View All Fragrances</a>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════
+       PHILOSOPHY INTERSTITIAL
+  ═══════════════════════════════════════════ -->
+  <section class="philosophy-banner" aria-labelledby="philosophy-text">
+    <div class="philosophy-inner">
+      <p id="philosophy-text" class="philosophy-quote">
+        <em>"We do not make perfume. We preserve invisible landscapes — distilled into glass."</em>
+      </p>
+      <span class="philosophy-attr">AURA VALE Atelier &nbsp;·&nbsp; Est. 2019</span>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════
+       CONTACT SECTION
+  ═══════════════════════════════════════════ -->
+  <section id="contact-section" aria-labelledby="contact-heading">
+    <div class="contact-inner">
+
+      <div class="contact-text">
+        <span class="section-label">Get in Touch</span>
+        <h2 id="contact-heading" class="contact-heading">Connect with Our<br /><em>Scent Specialists</em></h2>
+        <p class="contact-desc">
+          Whether you seek a bespoke fragrance consultation, wish to inquire about our wholesale programme, or simply want to know which scent is right for you — our specialists are ready.
+        </p>
+        <ul class="contact-details">
+          <li>
+            <span class="contact-icon" aria-hidden="true">✉</span>
+            <a href="mailto:hello@auravale.com">hello@auravale.com</a>
+          </li>
+          <li>
+            <span class="contact-icon" aria-hidden="true">☎</span>
+            <a href="tel:+92300000000">+92 300 000 0000</a>
+          </li>
+          <li>
+            <span class="contact-icon" aria-hidden="true">◎</span>
+            <span>Lahore &nbsp;·&nbsp; Karachi &nbsp;·&nbsp; Islamabad</span>
+          </li>
+        </ul>
+      </div>
+
+      <!-- STORVIA INJECT: contact-form -->
+      <div class="contact-form-zone" aria-label="Contact form — injected by commerce runtime">
+        <!-- Placeholder form structure for design preview -->
+        <form class="contact-form-placeholder" action="#" method="post">
+          <div class="form-group">
+            <label for="cf-name">Your Name</label>
+            <input type="text" id="cf-name" name="name" placeholder="e.g. Ayesha Khan" autocomplete="name" />
+          </div>
+          <div class="form-group">
+            <label for="cf-email">Email Address</label>
+            <input type="email" id="cf-email" name="email" placeholder="your@email.com" autocomplete="email" />
+          </div>
+          <div class="form-group">
+            <label for="cf-subject">Subject</label>
+            <select id="cf-subject" name="subject">
+              <option value="">Select a topic</option>
+              <option value="fragrance-consultation">Fragrance Consultation</option>
+              <option value="wholesale">Wholesale Inquiry</option>
+              <option value="gifting">Corporate Gifting</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="cf-message">Message</label>
+            <textarea id="cf-message" name="message" rows="5" placeholder="Tell us how we can help…"></textarea>
+          </div>
+          <button type="submit" class="btn-primary btn--full">Send Message</button>
+        </form>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════
+       FOOTER
+  ═══════════════════════════════════════════ -->
+  <footer id="store-footer">
+    <div class="footer-inner">
+
+      <!-- Col 1: Brand Bio -->
+      <div class="footer-col footer-col--brand">
+        <a href="/" class="logo-link footer-logo-link" aria-label="AURA VALE Home">
+          <img class="store-logo store-logo--footer" src="images/logo.png" alt="AURA VALE" />
+          <span class="logo-wordmark logo-wordmark--footer" aria-hidden="true">AURA VALE</span>
+        </a>
+        <p class="footer-bio">
+          An artisanal perfume house committed to botanical purity and the slow art of scent. Each elixir is handcrafted in small batches, never mass-produced.
+        </p>
+        <p class="footer-tagline-small">Lahore · Karachi · Islamabad</p>
+      </div>
+
+      <!-- Col 2: Quick Links / Policy -->
+      <div class="footer-col footer-col--links">
+        <h4 class="footer-col-title">Information</h4>
+        <nav aria-label="Policy and site links">
+          <ul class="footer-nav-list">
+            <li><a href="/collections">All Collections</a></li>
+            <li><a href="/about">Our Story</a></li>
+            <li><a href="/contact">Contact Us</a></li>
+            <li><a href="/faq">FAQs</a></li>
+          </ul>
+        </nav>
+
+        <div class="policy-links-zone" role="navigation" aria-label="Policy links">
+          <h4 class="footer-col-title">Policies</h4>
+          <ul class="footer-nav-list">
+            <li><a href="/privacy-policy">Privacy Policy</a></li>
+            <li><a href="/shipping-policy">Shipping Policy</a></li>
+            <li><a href="/return-policy">Return &amp; Refund Policy</a></li>
+            <li><a href="/terms">Terms of Service</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Col 3: Social -->
+      <div class="footer-col footer-col--social">
+        <h4 class="footer-col-title">Follow the Atelier</h4>
+        <p class="footer-social-desc">Scent stories, bloom harvests, and behind-the-bottle moments.</p>
+        <ul class="social-links">
+          <li>
+            <a href="https://instagram.com/auravale" class="social-link" target="_blank" rel="noopener noreferrer" aria-label="Follow AURA VALE on Instagram">
+              <svg class="social-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
+                <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/>
+                <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>
+              </svg>
+              <span>Instagram</span>
+            </a>
+          </li>
+          <li>
+            <a href="https://facebook.com/auravale" class="social-link" target="_blank" rel="noopener noreferrer" aria-label="Follow AURA VALE on Facebook">
+              <svg class="social-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>
+              </svg>
+              <span>Facebook</span>
+            </a>
+          </li>
+        </ul>
+
+        <div class="footer-newsletter">
+          <h4 class="footer-col-title">Scent Letters</h4>
+          <p>Subscribe to receive new arrivals, seasonal stories, and exclusive offers.</p>
+          <!-- STORVIA INJECT: newsletter-form -->
+          <div class="newsletter-zone">
+            <label for="footer-email" class="sr-only">Email address</label>
+            <input type="email" id="footer-email" name="email" placeholder="your@email.com" autocomplete="email" />
+            <button type="button" class="newsletter-btn" aria-label="Subscribe to newsletter">→</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Footer bottom bar -->
+    <div class="footer-bottom">
+      <p class="footer-copy">© 2025 AURA VALE. All rights reserved. Crafted with care in Pakistan.</p>
+      <p class="footer-credits">
+        <a href="/privacy-policy">Privacy</a>
+        <span aria-hidden="true">·</span>
+        <a href="/terms">Terms</a>
+        <span aria-hidden="true">·</span>
+        <a href="/sitemap">Sitemap</a>
+      </p>
+    </div>
+  </footer>
+
+</body>
+</html>

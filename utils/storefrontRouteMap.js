@@ -31,6 +31,30 @@ function basename(href) {
     return parts[parts.length - 1] || '';
 }
 
+function isHomeHref(href) {
+    const normalized = normalizeImportedHref(href);
+    if (!normalized || normalized === 'index.html') return true;
+    const base = basename(normalized).replace(/\.html$/i, '');
+    return base === 'index' || base === 'home';
+}
+
+function routeIsActive(storviaRoute, href, pageType) {
+    if (pageType === 'home' || isHomeHref(href)) return true;
+    return Boolean(storviaRoute);
+}
+
+function sanitizeStorivaRoute(route, { pageType, pageId, fileName, storeSlug } = {}) {
+    if (pageType === 'home' || pageId === 'home' || isHomeHref(fileName || pageId || '')) {
+        return '';
+    }
+    const normalized = String(route ?? '').trim();
+    if (!normalized || normalized === '/') return '';
+    const lower = normalized.toLowerCase();
+    if (lower === '/home' || lower === '/pages/home' || lower === '/pages/index') return '';
+    if (storeSlug && lower === `/pages/${String(storeSlug).toLowerCase()}`) return '';
+    return normalized;
+}
+
 function normalizeImportedHref(href) {
     if (!href || typeof href !== 'string') return '';
     const trimmed = href.trim();
@@ -149,7 +173,7 @@ function resolveHrefTarget(href, pages = []) {
         targetSlug: resolvedSlug,
         normalizedPath: normalized,
         storviaRoute,
-        status: storviaRoute ? 'active' : 'unmapped',
+        status: routeIsActive(storviaRoute, normalized, resolvedType) ? 'active' : 'unmapped',
         pageType: resolvedType,
     };
 }
@@ -168,7 +192,7 @@ function buildPageRouteLookup(pages = []) {
     return lookup;
 }
 
-function buildRouteMap(schema) {
+function buildRouteMap(schema, storeSlug = '') {
     const pages = schema?.pages || [];
     const routeMap = [];
     const seen = new Set();
@@ -176,7 +200,15 @@ function buildRouteMap(schema) {
     for (const page of pages) {
         const pageType = page.type && page.type !== 'imported' ? page.type : classifyPageType(page.fileName || page.id, page.title);
         const slug = page.slug ?? pageSlugFromFile(page.fileName || page.id);
-        const storviaRoute = page.storviaRoute || storviaRouteForPageType(pageType, slug);
+        let storviaRoute = page.storviaRoute !== undefined && page.storviaRoute !== null
+            ? page.storviaRoute
+            : storviaRouteForPageType(pageType, slug);
+        storviaRoute = sanitizeStorivaRoute(storviaRoute, {
+            pageType,
+            pageId: page.id,
+            fileName: page.fileName || page.id,
+            storeSlug,
+        });
         const key = `page:${page.id}`;
         if (!seen.has(key)) {
             seen.add(key);
@@ -188,7 +220,7 @@ function buildRouteMap(schema) {
                 targetId: page.id,
                 targetSlug: slug,
                 storviaRoute,
-                status: storviaRoute ? 'active' : 'unmapped',
+                status: routeIsActive(storviaRoute, page.fileName || page.id, pageType) ? 'active' : 'unmapped',
             });
         }
         page.type = pageType;
@@ -205,9 +237,12 @@ function buildRouteMap(schema) {
         const fromPageRoute = pageRouteLookup.get(base)
             || pageRouteLookup.get(normalized.toLowerCase());
         const resolved = resolveHrefTarget(href, pages);
-        const storviaRoute = fromPageRoute || link.storviaRoute || resolved.storviaRoute || '';
+        const storviaRoute = sanitizeStorivaRoute(
+            fromPageRoute || link.storviaRoute || resolved.storviaRoute || '',
+            { pageType: resolved.pageType, pageId: resolved.targetId, fileName: href, storeSlug }
+        );
         link.storviaRoute = storviaRoute;
-        link.storviaMapped = Boolean(storviaRoute);
+        link.storviaMapped = routeIsActive(storviaRoute, href, resolved.pageType);
         link.targetType = resolved.targetType;
 
         const key = `target:${normalized}`;
@@ -221,7 +256,7 @@ function buildRouteMap(schema) {
             targetId: resolved.targetId,
             targetSlug: resolved.targetSlug,
             storviaRoute,
-            status: storviaRoute ? 'active' : resolved.status,
+            status: routeIsActive(storviaRoute, href, resolved.pageType) ? 'active' : resolved.status,
             label: link.label,
             usedOnPages: 1,
         });
@@ -250,8 +285,13 @@ function publicPathForRoute(storeSlug, storviaRoute) {
         return storviaRoute.startsWith('/') ? storviaRoute : `/${storviaRoute}`;
     }
     const base = `/store/${storeSlug}`;
-    if (!storviaRoute || storviaRoute === '/') return base;
-    return `${base}${storviaRoute.startsWith('/') ? storviaRoute : `/${storviaRoute}`}`;
+    const route = String(storviaRoute || '').trim();
+    if (!route || route === '/') return base;
+    const lower = route.toLowerCase();
+    if (lower === `/pages/${String(storeSlug).toLowerCase()}` || lower === '/pages/home' || lower === '/pages/index') {
+        return base;
+    }
+    return `${base}${route.startsWith('/') ? route : `/${route}`}`;
 }
 
 function lookupRoute(routeMap, href) {
@@ -282,18 +322,21 @@ function rewriteHtmlLinks(html, routeMap, storeSlug) {
             return `<a ${before}href="#" data-storvia-blocked="true"${after}>`;
         }
         const route = lookupRoute(routeMap, href);
-        const storviaRoute = route?.storviaRoute || resolveHrefTarget(href, []).storviaRoute;
-        if (!storviaRoute) {
+        const resolved = resolveHrefTarget(href, []);
+        const storviaRoute = route?.storviaRoute !== undefined && route?.storviaRoute !== null
+            ? route.storviaRoute
+            : resolved.storviaRoute;
+        if (!routeIsActive(storviaRoute, href, resolved.pageType)) {
             return `<a ${before}href="#" data-storvia-unmapped="true" data-original-href="${href}"${after}>`;
         }
-        const publicPath = publicPathForRoute(storeSlug, storviaRoute);
+        const publicPath = publicPathForRoute(storeSlug, isHomeHref(href) ? '' : storviaRoute);
         return `<a ${before}href="${publicPath}" data-storvia-route="${storviaRoute}"${after}>`;
     });
 }
 
 function applyRouteMapToSchema(schema, storeSlug) {
     if (!schema) return schema;
-    buildRouteMap(schema);
+    buildRouteMap(schema, storeSlug);
     if (storeSlug) rewriteAssetUrlsInSchema(schema, storeSlug);
     for (const page of schema.pages || []) {
         for (const section of page.sections || []) {
@@ -338,6 +381,9 @@ function rewriteAssetUrlsInSchema(schema, storeSlug) {
 module.exports = {
     normalizeImportedHref,
     basename,
+    isHomeHref,
+    routeIsActive,
+    sanitizeStorivaRoute,
     classifyPageType,
     pageSlugFromFile,
     storviaRouteForPageType,

@@ -14,6 +14,7 @@ const {
     normalizeImportedHref,
     basename: routeBasename,
 } = require('../utils/storefrontRouteMap');
+const { extractColorsFromSchema, flattenEditableFields } = require('../utils/colorExtraction');
 
 /**
  * Controller to handle all post-import managed customizations
@@ -71,6 +72,106 @@ class ManagedStorefrontController {
     }
 
     /**
+     * Visual editor schema — pages, editable fields, colors, route map
+     */
+    async getEditorSchema(req, res) {
+        try {
+            const storefront = await ManagedStorefront.findOne({ storeId: req.storeId });
+            const store = await Store.findById(req.storeId).select('storeSlug name');
+            if (!storefront?.draftSchema?.pages?.length) {
+                return res.status(200).json({
+                    success: true,
+                    data: {
+                        pages: [],
+                        currentPageId: 'home',
+                        editableFields: [],
+                        colorTokens: [],
+                        routeMap: [],
+                        assets: [],
+                        draftStatus: { hasDraft: false },
+                    },
+                });
+            }
+            const schema = JSON.parse(JSON.stringify(storefront.draftSchema));
+            applyRouteMapToSchema(schema, store?.storeSlug || '');
+            const pageId = req.query.pageId || 'home';
+            const currentPage = schema.pages.find((p) => p.id === pageId) || schema.pages[0];
+            res.status(200).json({
+                success: true,
+                data: {
+                    pages: schema.pages.map((p) => ({
+                        id: p.id,
+                        title: p.title || p.id,
+                        slug: p.slug || '',
+                        fileName: p.fileName,
+                        storivaRoute: p.storivaRoute || '',
+                        type: p.type,
+                    })),
+                    currentPageId: currentPage?.id || 'home',
+                    currentPage,
+                    scopedCss: schema.scopedCss || schema.globalStyles?.rawCss || '',
+                    globalStyles: schema.globalStyles || {},
+                    editableFields: flattenEditableFields(schema),
+                    colorTokens: extractColorsFromSchema(schema),
+                    routeMap: schema.routeMap || [],
+                    assets: schema.assets || [],
+                    storeSlug: store?.storeSlug || '',
+                    draftStatus: {
+                        hasDraft: true,
+                        lastSavedAt: storefront.updatedAt,
+                        version: storefront.version,
+                        status: storefront.status,
+                    },
+                },
+            });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
+    async updateEditableField(req, res) {
+        try {
+            const { fieldId } = req.params;
+            const { draftValue, pageId, sectionId, fieldKey } = req.body;
+            const storefront = await ManagedStorefront.findOne({ storeId: req.storeId });
+            if (!storefront?.draftSchema) {
+                return res.status(404).json({ success: false, message: 'No draft schema found' });
+            }
+            const schema = storefront.draftSchema;
+            let page = null;
+            let section = null;
+            let field = null;
+
+            if (pageId && sectionId && fieldKey) {
+                page = schema.pages.find((p) => p.id === pageId);
+                section = page?.sections?.find((s) => s.id === sectionId);
+                field = section?.editableFields?.find((f) => f.key === fieldKey);
+            } else if (fieldId) {
+                const parts = String(fieldId).split('__');
+                if (parts.length >= 3) {
+                    const [pId, sId, ...keyParts] = parts;
+                    const fKey = keyParts.join('__');
+                    page = schema.pages.find((p) => p.id === pId);
+                    section = page?.sections?.find((s) => s.id === sId);
+                    field = section?.editableFields?.find((f) => f.key === fKey);
+                }
+            }
+
+            if (!field) {
+                return res.status(404).json({ success: false, message: 'Editable field not found' });
+            }
+            field.value = typeof draftValue === 'string' ? draftValue.trim() : draftValue;
+            section.editedContent = section.editedContent || {};
+            section.editedContent[field.key] = field.value;
+            storefront.markModified('draftSchema');
+            await storefront.save();
+            res.status(200).json({ success: true, data: { fieldId, draftValue: field.value } });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
+    /**
      * Get all detected pages and their inter-page links from the draft schema
      */
     async getLinks(req, res) {
@@ -81,7 +182,6 @@ class ManagedStorefrontController {
             }
             const store = await Store.findById(req.storeId).select('storeSlug');
             const schema = storefront.draftSchema;
-            buildRouteMap(schema);
             applyRouteMapToSchema(schema, store?.storeSlug || '');
             storefront.markModified('draftSchema');
             await storefront.save();
@@ -176,7 +276,6 @@ class ManagedStorefrontController {
             }
 
             const store = await Store.findById(req.storeId).select('storeSlug');
-            buildRouteMap(schema);
             applyRouteMapToSchema(schema, store?.storeSlug || '');
             storefront.markModified('draftSchema');
             await storefront.save();
@@ -207,10 +306,11 @@ class ManagedStorefrontController {
             if (!storefront?.draftSchema) {
                 return res.status(404).json({ success: false, message: 'No draft schema found' });
             }
-            const routeMap = buildRouteMap(storefront.draftSchema);
+            const store = await Store.findById(req.storeId).select('storeSlug');
+            applyRouteMapToSchema(storefront.draftSchema, store?.storeSlug || '');
             storefront.markModified('draftSchema');
             await storefront.save();
-            res.status(200).json({ success: true, data: routeMap });
+            res.status(200).json({ success: true, data: storefront.draftSchema.routeMap || [] });
         } catch (error) {
             res.status(500).json({ success: false, message: error.message });
         }

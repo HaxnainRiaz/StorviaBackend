@@ -29,6 +29,14 @@ router.get('/pages', (req, res, next) => {
     managedStorefrontCtrl.getPages(req, res, next);
 });
 
+router.get('/editor-schema', (req, res, next) => {
+    managedStorefrontCtrl.getEditorSchema(req, res, next);
+});
+
+router.patch('/editable-fields/:fieldId', (req, res, next) => {
+    managedStorefrontCtrl.updateEditableField(req, res, next);
+});
+
 router.get('/links', (req, res, next) => {
     managedStorefrontCtrl.getLinks(req, res, next);
 });

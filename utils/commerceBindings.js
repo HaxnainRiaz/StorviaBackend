@@ -71,6 +71,90 @@ function sectionMatchesSelector(section, sourceSelector) {
     return false;
 }
 
+function inferProductSourceFromSection(section, page = {}) {
+    const haystack = [
+        section.selector,
+        section.label,
+        section.classVal,
+        section.classAttr,
+        section.idAttr,
+        section.html,
+        page.slug,
+        page.type,
+        page.title,
+    ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+    const cardCount = section.importedProductCount || section.extractedProducts?.length || 0;
+    const limit = Math.max(cardCount || 4, 4);
+
+    if (/best[\s_-]?sell/.test(haystack)) {
+        return { source: 'best_sellers', limit: Math.min(limit, 12) };
+    }
+    if (/new[\s_-]?arrival/.test(haystack)) {
+        return { source: 'new_arrival', limit: Math.min(limit, 12) };
+    }
+    if (/featured/.test(haystack)) {
+        return { source: 'featured_products', limit: Math.min(limit, 12) };
+    }
+    if (/discount|sale/.test(haystack)) {
+        return { source: 'discounted_products', limit: Math.min(limit, 12) };
+    }
+
+    const isShopPage =
+        page.type === 'products' ||
+        ['shop', 'products', 'store'].includes(String(page.slug || '').toLowerCase());
+
+    if (isShopPage) {
+        return { source: 'newest_products', limit: Math.max(limit, 24) };
+    }
+
+    return { source: 'newest_products', limit: Math.min(limit, 8) };
+}
+
+/**
+ * Only true product-grid zones become live commerce sections.
+ * Hero banners and single-product promos stay as imported static HTML.
+ */
+function shouldBindSectionAsProductGrid(section, page = {}) {
+    if (!section) return false;
+    if (section.type === 'dynamic_product_grid' || section.type === 'dynamic_featured_products') {
+        return true;
+    }
+
+    const cardCount = section.importedProductCount || section.extractedProducts?.length || 0;
+    if (!cardCount) return false;
+
+    const haystack = [
+        section.selector,
+        section.label,
+        section.classVal,
+        section.classAttr,
+        section.html,
+    ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+    const isShopPage =
+        page.type === 'products' ||
+        ['shop', 'products', 'store'].includes(String(page.slug || '').toLowerCase());
+
+    const hasGridClass = /product[\s_-]?grid|products[\s_-]?grid|shop[\s_-]?grid|product[\s_-]?list|catalog/.test(
+        haystack
+    );
+    const hasCollectionClass = /featured|best[\s_-]?sell|new[\s_-]?arrival|collection/.test(haystack);
+
+    if (isShopPage && cardCount >= 1) return true;
+    if (hasGridClass && cardCount >= 1) return true;
+    if (hasCollectionClass && cardCount >= 1) return true;
+    if (cardCount >= 2) return true;
+
+    return false;
+}
+
 function isProductGridSection(section) {
     if (!section) return false;
     if (section.type === 'dynamic_product_grid' || section.type === 'dynamic_featured_products') {
@@ -143,22 +227,29 @@ function applyMappingsToSchema(schema, mappings = []) {
 function autoBindProductGrids(schema, config = {}) {
     if (!schema?.pages) return schema;
 
-    const defaultConfig = {
-        source: config.source || 'newest_products',
-        limit: config.limit || 8,
-        showPrice: config.showPrice !== false,
-        showAddToCart: config.showAddToCart !== false,
-        gridColumns: config.gridColumns || 4,
-    };
-
     for (const page of schema.pages) {
         for (const section of page.sections || []) {
-            if (section.type === 'static_or_mapped' && isProductGridSection(section)) {
-                section.type = 'dynamic_product_grid';
-                section.source = 'storvia';
-                section.bindingType = 'product_grid';
-                section.config = { ...defaultConfig, ...(section.config || {}) };
-            }
+            if (section.type !== 'static_or_mapped') continue;
+            if (!shouldBindSectionAsProductGrid(section, page)) continue;
+
+            const sourceConfig = inferProductSourceFromSection(section, page);
+            const cardTemplate =
+                section.cardTemplate || schema?.importedProducts?.cardTemplate || config.cardTemplate || '';
+
+            section.originalHtml = section.originalHtml || section.html;
+            section.type = 'dynamic_product_grid';
+            section.source = 'storvia';
+            section.bindingType = 'product_grid';
+            section.config = {
+                source: config.source || sourceConfig.source,
+                limit: config.limit || sourceConfig.limit,
+                showPrice: config.showPrice !== false,
+                showAddToCart: config.showAddToCart !== false,
+                gridColumns: config.gridColumns || 4,
+                useDesignTemplate: Boolean(cardTemplate),
+                cardTemplate,
+                ...(section.config || {}),
+            };
         }
     }
     return schema;
@@ -239,6 +330,8 @@ module.exports = {
     targetTypeToBindingType,
     sectionMatchesSelector,
     isProductGridSection,
+    shouldBindSectionAsProductGrid,
+    inferProductSourceFromSection,
     findProductGridSections,
     findFirstProductGridSection,
     applyMappingsToSchema,

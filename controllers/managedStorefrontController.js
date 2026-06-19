@@ -26,6 +26,7 @@ const {
     validatePublishBindings,
     isProductGridSection,
 } = require('../utils/commerceBindings');
+const { enrichSchemaWithDesignProducts } = require('../utils/designProductExtractor');
 
 /**
  * Controller to handle all post-import managed customizations
@@ -887,6 +888,17 @@ class ManagedStorefrontController {
             }
             const store = await Store.findById(req.storeId);
             const slug = store?.storeSlug || '';
+
+            if (storefront.designImportId) {
+                const { schema: enriched, productCount } = await enrichSchemaWithDesignProducts(
+                    storefront.draftSchema,
+                    req.storeId,
+                    storefront.designImportId
+                );
+                autoBindProductGrids(enriched);
+                storefront.draftSchema = enriched;
+            }
+
             storefront.draftSchema = applyRouteMapToSchema(storefront.draftSchema, slug);
             if (storefront.publishedSchema) {
                 storefront.publishedSchema = applyRouteMapToSchema(

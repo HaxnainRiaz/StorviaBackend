@@ -17,6 +17,7 @@ const {
     targetTypeToComponentType,
     sectionMatchesSelector,
 } = require('../utils/commerceBindings');
+const { enrichSchemaWithDesignProducts } = require('../utils/designProductExtractor');
 
 const ALLOWED_EXT = ['.html', '.css', '.png', '.jpg', '.jpeg', '.webp', '.svg', '.woff', '.woff2', '.ttf', '.json'];
 const REJECTED_EXT = ['.js', '.mjs', '.ts', '.tsx', '.jsx', '.php', '.py', '.rb', '.exe', '.bat', '.sh', '.cmd', '.env', '.sql', '.zip'];
@@ -138,14 +139,36 @@ class DesignImportController {
             }
 
             const schema = await this.parseAndBuildSchema(designRoot, req.storeId, designImport._id);
-            autoBindProductGrids(schema);
+
+            const dbAssets = await StorefrontAsset.find({ storeId: req.storeId, designImportId: designImport._id }).lean();
+            const assetUrlMap = {};
+            for (const asset of dbAssets) {
+                assetUrlMap[asset.originalName] = asset.safeUrl;
+                assetUrlMap[path.basename(asset.originalName)] = asset.safeUrl;
+            }
+            const rewriteUrl = (rawUrl) => {
+                if (!rawUrl || rawUrl.startsWith('http') || rawUrl.startsWith('data:') || rawUrl.startsWith('//')) {
+                    return rawUrl;
+                }
+                const cleaned = rawUrl.replace(/^[./]+/, '').replace(/\\/g, '/');
+                return assetUrlMap[cleaned] || assetUrlMap[path.basename(cleaned)] || rawUrl;
+            };
+
+            const { schema: enrichedSchema, productCount } = await enrichSchemaWithDesignProducts(
+                schema,
+                req.storeId,
+                designImport._id,
+                rewriteUrl
+            );
+
+            autoBindProductGrids(enrichedSchema);
 
             // Update or create ManagedStorefront
             const storefront = await ManagedStorefront.findOneAndUpdate(
                 { storeId: req.storeId },
                 {
                     designImportId: designImport._id,
-                    draftSchema: schema,
+                    draftSchema: enrichedSchema,
                     status: 'draft'
                 },
                 { upsert: true, new: true }

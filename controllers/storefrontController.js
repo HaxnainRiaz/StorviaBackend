@@ -198,7 +198,7 @@ exports.createOrder = async (req, res) => {
     const { items = [], shippingAddress, coupon: couponCode } = req.body;
     if (!items.length) return res.status(400).json({ success: false, message: 'No order items' });
 
-    const productIds = items.map(item => item.product);
+    const productIds = items.map((item) => item.product || item.productId).filter(Boolean);
     const products = await Product.find({ _id: { $in: productIds }, storeId: req.storeId, status: 'active' });
     if (products.length !== productIds.length) {
         return res.status(400).json({ success: false, message: 'Cart contains products outside this store or unavailable products' });
@@ -207,7 +207,7 @@ exports.createOrder = async (req, res) => {
     let itemsTotal = 0;
     const calculatedItems = [];
     for (const item of items) {
-        const product = products.find(p => p._id.toString() === String(item.product));
+        const product = products.find((p) => p._id.toString() === String(item.product || item.productId));
         if (!product || product.stock < item.quantity) {
             return res.status(400).json({ success: false, message: `Insufficient stock for ${product?.title || item.product}` });
         }

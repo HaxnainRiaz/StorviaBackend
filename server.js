@@ -35,6 +35,8 @@ const allowedOrigins = [
     'http://127.0.0.1:3000',
     'http://127.0.0.1:3001',
     'http://127.0.0.1:5000',
+    'https://storvia-frontend.vercel.app',
+    'https://storvia-backend.vercel.app',
     'https://store-pannel.vercel.app',
     'https://store-admin-one.vercel.app',
     'https://luminelle.org'

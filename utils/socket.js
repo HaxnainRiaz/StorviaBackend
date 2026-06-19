@@ -1,5 +1,10 @@
 let io;
 
+const noopEmitter = {
+    to: () => noopEmitter,
+    emit: () => noopEmitter
+};
+
 module.exports = {
     init: (httpServer) => {
         io = require('socket.io')(httpServer, {
@@ -13,7 +18,8 @@ module.exports = {
     },
     getIO: () => {
         if (!io) {
-            throw new Error("Socket.io not initialized!");
+            // Socket.io requires a persistent HTTP server (not available on Vercel serverless).
+            return noopEmitter;
         }
         return io;
     }

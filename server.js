@@ -194,8 +194,8 @@ app.use('/api/storefront', storefrontRoutes);
 // Legacy visual builder API disabled — imported-store manager is canonical.
 // app.use('/api/builder', protect, builderRoutes);
 
-// Conversions API database queue processor background worker
-if (process.env.ENABLE_TRACKING_WORKER === 'true' || process.env.NODE_ENV !== 'production') {
+// Conversions API database queue processor background worker (local/long-running only)
+if (!process.env.VERCEL && (process.env.ENABLE_TRACKING_WORKER === 'true' || process.env.NODE_ENV !== 'production')) {
     const { processPendingQueue } = require('./services/metaQueueService');
     console.log('🔄 [Meta Queue Worker] Starting background sync process (every 15s)...');
     setInterval(async () => {
@@ -206,6 +206,15 @@ if (process.env.ENABLE_TRACKING_WORKER === 'true' || process.env.NODE_ENV !== 'p
         }
     }, 15000);
 }
+
+app.get(['/', '/api/health'], (req, res) => {
+    res.status(200).json({
+        success: true,
+        message: 'Storiva API is running',
+        environment: process.env.NODE_ENV || 'development',
+        dbConnected: mongoose.connection.readyState === 1
+    });
+});
 
 // Static files (must be after /uploads/ route to prioritize DB serving)
 app.use(express.static(path.join(__dirname, 'public')));
@@ -218,65 +227,61 @@ app.use((err, req, res, next) => {
     });
 });
 
-const http = require('http');
-const socketUtil = require('./utils/socket'); // Import socket util
-
-// ... (existing middleware) ...
-
-// Create HTTP server
-const server = http.createServer(app);
-
-// Initialize Socket.io
-const io = socketUtil.init(server);
-
-io.on('connection', async (socket) => {
-    console.log('Client connected:', socket.id);
-
-    try {
-        const token = socket.handshake.auth?.token;
-        const storeId = socket.handshake.auth?.storeId;
-        if (token && storeId) {
-            const jwt = require('jsonwebtoken');
-            const User = require('./models/User');
-            const StoreMember = require('./models/StoreMember');
-            const decoded = jwt.verify(token, process.env.JWT_SECRET);
-            const user = await User.findById(decoded.id);
-            const membership = user && await StoreMember.findOne({ userId: user._id, storeId, status: 'active' });
-            if (membership) {
-                socket.join(`store:${storeId}`);
-                socket.data.userId = user._id.toString();
-                socket.data.storeId = storeId;
-            }
-        }
-    } catch (error) {
-        console.warn('Socket auth failed:', error.message);
-    }
-
-    socket.on('disconnect', () => {
-        console.log('Client disconnected:', socket.id);
-    });
-});
-
-const PORT = process.env.PORT || 5000;
+const isVercel = Boolean(process.env.VERCEL);
 
 /**
- * STARTUP WRAPPER
- * Automatically kills existing process on PORT to prevent EADDRINUSE in dev
+ * VERCEL / SERVERLESS: export the Express app only.
+ * Vercel invokes the handler per request — do NOT call server.listen().
  */
-const startServer = (retries = 3) => {
+if (isVercel) {
+    module.exports = app;
+} else {
+    const http = require('http');
+    const socketUtil = require('./utils/socket');
+
+    const server = http.createServer(app);
+    const io = socketUtil.init(server);
+
+    io.on('connection', async (socket) => {
+        console.log('Client connected:', socket.id);
+
+        try {
+            const token = socket.handshake.auth?.token;
+            const storeId = socket.handshake.auth?.storeId;
+            if (token && storeId) {
+                const jwt = require('jsonwebtoken');
+                const User = require('./models/User');
+                const StoreMember = require('./models/StoreMember');
+                const decoded = jwt.verify(token, process.env.JWT_SECRET);
+                const user = await User.findById(decoded.id);
+                const membership = user && await StoreMember.findOne({ userId: user._id, storeId, status: 'active' });
+                if (membership) {
+                    socket.join(`store:${storeId}`);
+                    socket.data.userId = user._id.toString();
+                    socket.data.storeId = storeId;
+                }
+            }
+        } catch (error) {
+            console.warn('Socket auth failed:', error.message);
+        }
+
+        socket.on('disconnect', () => {
+            console.log('Client disconnected:', socket.id);
+        });
+    });
+
+    const PORT = process.env.PORT || 5000;
+
     server.listen(PORT, () => {
         console.log(`🚀 Server running on port ${PORT}`);
     }).on('error', (err) => {
-        if (err.code === 'EADDRINUSE' && retries > 0) {
-            console.log(`[RETRY] Port ${PORT} busy, retrying in 1.5s... (${retries} left)`);
-            setTimeout(() => startServer(retries - 1), 1500);
+        if (err.code === 'EADDRINUSE') {
+            console.error(`[FATAL] Port ${PORT} is already in use. Stop the other process or change PORT.`);
         } else {
             console.error('[FATAL] Server failed to start:', err);
-            process.exit(1);
         }
+        process.exit(1);
     });
-};
 
-startServer();
-
-module.exports = server; // Export server instead of app
+    module.exports = server;
+}

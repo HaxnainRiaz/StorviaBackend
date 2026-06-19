@@ -64,6 +64,20 @@ const productSchema = new mongoose.Schema({
         type: Boolean,
         default: false,
     },
+    isBestSeller: {
+        type: Boolean,
+        default: false
+    },
+    isNewArrival: {
+        type: Boolean,
+        default: false
+    },
+    productType: {
+        type: String,
+        enum: ['standard', 'featured', 'best_seller', 'new_arrival'],
+        default: 'standard',
+        index: true
+    },
     status: {
         type: String,
         enum: ['draft', 'active', 'inactive', 'archived'],
@@ -86,10 +100,6 @@ const productSchema = new mongoose.Schema({
     metaDescription: {
         type: String,
         default: ''
-    },
-    isBestSeller: {
-        type: Boolean,
-        default: false
     },
     sku: { type: String, default: '' },
     barcode: { type: String, default: '' },

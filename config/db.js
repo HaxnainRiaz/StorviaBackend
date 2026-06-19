@@ -38,16 +38,17 @@ const connectDB = async (retryCount = 0, maxRetries = 3) => {
         const isLocal = uri.includes('localhost') || uri.includes('127.0.0.1');
         const hasTlsInUri = /[?&](tls|ssl)=/i.test(uri);
         const isAtlas = uri.includes('mongodb.net');
+        const isServerless = Boolean(process.env.VERCEL);
         const opts = {
             bufferCommands: false,
-            serverSelectionTimeoutMS: Number(process.env.MONGO_SERVER_SELECTION_TIMEOUT_MS || 10000),
+            serverSelectionTimeoutMS: Number(process.env.MONGO_SERVER_SELECTION_TIMEOUT_MS || (isServerless ? 8000 : 10000)),
             socketTimeoutMS: Number(process.env.MONGO_SOCKET_TIMEOUT_MS || 30000),
             family: 4, // IPv4 only
             retryWrites: true,
             retryReads: true,
-            maxPoolSize: 10,
-            minPoolSize: 2,
-            connectTimeoutMS: Number(process.env.MONGO_CONNECT_TIMEOUT_MS || 10000)
+            maxPoolSize: isServerless ? 5 : 10,
+            minPoolSize: isServerless ? 0 : 2,
+            connectTimeoutMS: Number(process.env.MONGO_CONNECT_TIMEOUT_MS || (isServerless ? 8000 : 10000))
         };
 
         // Do not pass tls/ssl in both URI and options. The MongoDB driver rejects

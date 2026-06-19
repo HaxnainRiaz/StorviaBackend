@@ -5,7 +5,53 @@ const Category = require('../models/Category');
 const { createLog } = require('./auditController');
 
 const storeFilter = (req, extra = {}) => req.storeId ? { ...extra, storeId: req.storeId } : extra;
-const mutableBulkFields = ['status', 'category', 'tags', 'price', 'salePrice', 'stock', 'isFeatured', 'isBestSeller'];
+const mutableBulkFields = ['status', 'category', 'tags', 'price', 'salePrice', 'stock', 'isFeatured', 'isBestSeller', 'isNewArrival', 'productType'];
+
+function syncProductTypeFlags(body) {
+    if (body.productType) {
+        body.isFeatured = body.productType === 'featured';
+        body.isBestSeller = body.productType === 'best_seller';
+        body.isNewArrival = body.productType === 'new_arrival';
+        return body;
+    }
+    if (body.isFeatured) body.productType = 'featured';
+    else if (body.isBestSeller) body.productType = 'best_seller';
+    else if (body.isNewArrival) body.productType = 'new_arrival';
+    else if (body.productType === undefined) body.productType = 'standard';
+    return body;
+}
+
+function normalizeProductPayload(body) {
+    if (body.isBestseller !== undefined) body.isBestSeller = body.isBestseller;
+
+    syncProductTypeFlags(body);
+
+    if (body.seo) {
+        body.metaTitle = body.seo.metaTitle || '';
+        body.metaDescription = body.seo.metaDescription || '';
+        delete body.seo;
+    }
+
+    if (body.mainImage !== undefined || body.secondaryImages !== undefined) {
+        const secondary = Array.isArray(body.secondaryImages) ? body.secondaryImages : [];
+        const main = body.mainImage || '';
+        body.images = [main, ...secondary].filter(Boolean);
+        delete body.mainImage;
+        delete body.secondaryImages;
+    }
+
+    if (body.category !== undefined && body.category !== null && !Array.isArray(body.category)) {
+        body.category = body.category ? [body.category] : [];
+    }
+
+    if (body.visibilityStatus) {
+        body.status = body.visibilityStatus === 'published' ? 'active' : 'inactive';
+        delete body.visibilityStatus;
+    }
+
+    delete body.isBestseller;
+    return body;
+}
 
 // ... (keep getProducts and getProduct same)
 
@@ -64,26 +110,11 @@ exports.createProduct = async (req, res) => {
     try {
         delete req.body.storeId;
         if (req.storeId) req.body.storeId = req.storeId;
-        console.log('Product payload received');
 
-        // Map isBestseller (various casings)
-        if (req.body.isBestseller !== undefined) req.body.isBestSeller = req.body.isBestseller;
-        if (req.body.isBestSeller === undefined && req.body.isBestseller !== undefined) {
-            req.body.isBestSeller = req.body.isBestseller;
-        }
-
-        if (req.body.seo) {
-            req.body.metaTitle = req.body.seo.metaTitle || '';
-            req.body.metaDescription = req.body.seo.metaDescription || '';
-        }
+        normalizeProductPayload(req.body);
 
         if (req.body.howToUse !== undefined) req.body.usage = req.body.howToUse;
 
-        if (req.body.visibilityStatus) {
-            req.body.status = req.body.visibilityStatus === 'published' ? 'active' : 'inactive';
-        }
-
-        // Map Category String or Object to ID
         // Map Category String or Object to ID
         if (req.body.category) {
             const cats = Array.isArray(req.body.category) ? req.body.category : [req.body.category];
@@ -130,17 +161,10 @@ exports.createProduct = async (req, res) => {
 exports.updateProduct = async (req, res) => {
     try {
         delete req.body.storeId;
-        console.log('Product update payload received');
 
-        if (req.body.isBestseller !== undefined) req.body.isBestSeller = req.body.isBestseller;
-        if (req.body.seo) {
-            req.body.metaTitle = req.body.seo.metaTitle || '';
-            req.body.metaDescription = req.body.seo.metaDescription || '';
-        }
+        normalizeProductPayload(req.body);
+
         if (req.body.howToUse !== undefined) req.body.usage = req.body.howToUse;
-        if (req.body.visibilityStatus) {
-            req.body.status = req.body.visibilityStatus === 'published' ? 'active' : 'inactive';
-        }
 
         // Map Category String or Object to ID (Support Multiple)
         if (req.body.category) {

@@ -15,6 +15,17 @@ const {
     basename: routeBasename,
 } = require('../utils/storefrontRouteMap');
 const { extractColorsFromSchema, flattenEditableFields } = require('../utils/colorExtraction');
+const StorefrontCommerceBinding = require('../models/StorefrontCommerceBinding');
+const StorefrontMapping = require('../models/StorefrontMapping');
+const {
+    applyMappingsToSchema,
+    autoBindProductGrids,
+    buildBindingsFromSchema,
+    findFirstProductGridSection,
+    findProductGridSections,
+    validatePublishBindings,
+    isProductGridSection,
+} = require('../utils/commerceBindings');
 
 /**
  * Controller to handle all post-import managed customizations
@@ -731,23 +742,32 @@ class ManagedStorefrontController {
         try {
             const storefront = await ManagedStorefront.findOne({ storeId: req.storeId });
             if (!storefront || !storefront.draftSchema?.pages) {
-                return res.status(200).json({ success: true, data: [] });
+                return res.status(200).json({ success: true, data: null });
             }
-            const mappings = [];
-            for (const page of storefront.draftSchema.pages) {
-                for (const section of page.sections) {
-                    if (section.type === 'dynamic_product_grid' || section.tagName === 'product-grid' || (section.classVal && section.classVal.includes('product-grid'))) {
-                        mappings.push({
-                            pageId: page.id,
-                            sectionId: section.id,
-                            source: section.config?.source || 'newest',
-                            limit: section.config?.limit || 8,
-                            collectionId: section.config?.collectionId || null
-                        });
-                    }
-                }
+            const grids = findProductGridSections(storefront.draftSchema);
+            const first = grids[0];
+            if (!first) {
+                return res.status(200).json({ success: true, data: null, availableSections: [] });
             }
-            res.status(200).json({ success: true, data: mappings });
+            const section = first.section;
+            res.status(200).json({
+                success: true,
+                data: {
+                    pageId: first.pageId,
+                    sectionId: first.sectionId,
+                    source: section.config?.source || 'newest_products',
+                    limit: section.config?.limit || 8,
+                    collectionId: section.config?.collectionId || null,
+                    showPrice: section.config?.showPrice !== false,
+                    showAddToCart: section.config?.showAddToCart !== false,
+                    gridColumns: section.config?.gridColumns || 4,
+                },
+                availableSections: grids.map((g) => ({
+                    pageId: g.pageId,
+                    sectionId: g.sectionId,
+                    label: g.section.label || g.section.selector,
+                })),
+            });
         } catch (error) {
             res.status(500).json({ success: false, message: error.message });
         }
@@ -758,28 +778,52 @@ class ManagedStorefrontController {
      */
     async updateProductMapping(req, res) {
         try {
-            const { pageId = 'home', sectionId, source, limit = 8, collectionId = null } = req.body;
+            let { pageId = 'home', sectionId, source, limit = 8, collectionId = null, showPrice, showAddToCart, gridColumns } = req.body;
             const storefront = await ManagedStorefront.findOne({ storeId: req.storeId });
             if (!storefront) {
                 return res.status(404).json({ success: false, message: 'Storefront design not found' });
             }
             const schema = storefront.draftSchema;
-            const page = schema.pages.find(p => p.id === pageId);
+            let page = schema.pages.find((p) => p.id === pageId);
+            let section = page?.sections?.find((s) => s.id === sectionId);
+
+            if (!section) {
+                const auto = findFirstProductGridSection(schema);
+                if (auto) {
+                    pageId = auto.pageId;
+                    page = schema.pages.find((p) => p.id === pageId);
+                    section = auto.section;
+                    sectionId = auto.sectionId;
+                }
+            }
+
             if (!page) return res.status(400).json({ success: false, message: 'Page not found' });
-            const section = page.sections.find(s => s.id === sectionId);
-            if (!section) return res.status(400).json({ success: false, message: 'Section not found' });
+            if (!section) return res.status(400).json({ success: false, message: 'Product grid section not found. Run auto-detect bindings first.' });
 
             section.type = 'dynamic_product_grid';
             section.source = 'storvia';
+            section.bindingType = 'product_grid';
             section.config = {
-                source: source || 'newest',
+                ...(section.config || {}),
+                source: source || 'newest_products',
                 limit: Number(limit) || 8,
-                collectionId
+                collectionId,
+                showPrice: showPrice !== false,
+                showAddToCart: showAddToCart !== false,
+                gridColumns: Number(gridColumns) || 4,
             };
             storefront.draftSchema = schema;
             storefront.markModified('draftSchema');
             await storefront.save();
-            res.status(200).json({ success: true, data: storefront });
+            await this.syncCommerceBindings(storefront);
+            res.status(200).json({
+                success: true,
+                data: {
+                    pageId,
+                    sectionId,
+                    ...section.config,
+                },
+            });
         } catch (error) {
             res.status(500).json({ success: false, message: error.message });
         }
@@ -863,6 +907,130 @@ class ManagedStorefrontController {
         }
     }
 
+    async syncCommerceBindings(storefront) {
+        const schema = storefront.draftSchema || {};
+        const bindings = buildBindingsFromSchema(schema, storefront.storeId, storefront._id);
+        await StorefrontCommerceBinding.deleteMany({ storeId: storefront.storeId });
+        if (bindings.length) {
+            await StorefrontCommerceBinding.insertMany(bindings);
+        }
+        return bindings;
+    }
+
+    async getCommerceBindings(req, res) {
+        try {
+            const storefront = await ManagedStorefront.findOne({ storeId: req.storeId });
+            if (!storefront) {
+                return res.status(404).json({ success: false, message: 'Storefront not found' });
+            }
+            let bindings = await StorefrontCommerceBinding.find({ storeId: req.storeId }).sort({ pageId: 1, bindingType: 1 });
+            if (!bindings.length && storefront.draftSchema) {
+                bindings = await this.syncCommerceBindings(storefront);
+            }
+            const checklist = validatePublishBindings(storefront.draftSchema || {});
+            res.status(200).json({ success: true, data: bindings, checklist });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
+    async updateCommerceBindings(req, res) {
+        try {
+            const { bindings = [] } = req.body;
+            const storefront = await ManagedStorefront.findOne({ storeId: req.storeId });
+            if (!storefront?.draftSchema) {
+                return res.status(404).json({ success: false, message: 'Storefront not found' });
+            }
+
+            const schema = storefront.draftSchema;
+            for (const item of bindings) {
+                const page = schema.pages.find((p) => p.id === item.pageId);
+                const section = page?.sections?.find((s) => s.id === item.sectionId || s.selector === item.sourceSelector);
+                if (!section) continue;
+
+                if (item.bindingType === 'product_grid') {
+                    section.type = 'dynamic_product_grid';
+                    section.bindingType = 'product_grid';
+                    section.source = 'storvia';
+                    section.config = { ...(section.config || {}), ...(item.config || {}) };
+                } else if (item.bindingType === 'cart_button') {
+                    section.type = 'dynamic_cart_button';
+                    section.bindingType = 'cart_button';
+                    section.source = 'storvia';
+                } else if (item.bindingType === 'contact_support_form') {
+                    section.type = 'dynamic_contact';
+                    section.bindingType = 'contact_support_form';
+                    section.source = 'storvia';
+                } else if (item.bindingType === 'checkout_button') {
+                    section.bindingType = 'checkout_button';
+                    section.config = { ...(section.config || {}), ...(item.config || {}) };
+                }
+
+                await StorefrontCommerceBinding.findOneAndUpdate(
+                    {
+                        storeId: req.storeId,
+                        pageId: item.pageId || page.id,
+                        bindingType: item.bindingType,
+                        sourceSelector: item.sourceSelector || section.selector,
+                    },
+                    {
+                        managedStorefrontId: storefront._id,
+                        sourceLabel: item.sourceLabel || section.label || '',
+                        config: item.config || {},
+                        required: Boolean(item.required),
+                        status: item.status || 'mapped',
+                    },
+                    { upsert: true, new: true }
+                );
+            }
+
+            storefront.draftSchema = schema;
+            storefront.markModified('draftSchema');
+            await storefront.save();
+            const saved = await StorefrontCommerceBinding.find({ storeId: req.storeId });
+            res.status(200).json({ success: true, data: saved });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
+    async autoDetectCommerceBindings(req, res) {
+        try {
+            const storefront = await ManagedStorefront.findOne({ storeId: req.storeId });
+            if (!storefront?.draftSchema) {
+                return res.status(404).json({ success: false, message: 'Storefront not found' });
+            }
+
+            const mappings = await StorefrontMapping.find({
+                storeId: req.storeId,
+                designImportId: storefront.designImportId,
+            });
+            storefront.draftSchema.mappings = mappings;
+            applyMappingsToSchema(storefront.draftSchema, mappings);
+            autoBindProductGrids(storefront.draftSchema);
+            storefront.markModified('draftSchema');
+            await storefront.save();
+            const bindings = await this.syncCommerceBindings(storefront);
+            const checklist = validatePublishBindings(storefront.draftSchema);
+            res.status(200).json({ success: true, data: bindings, checklist });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
+    async getPublishChecklist(req, res) {
+        try {
+            const storefront = await ManagedStorefront.findOne({ storeId: req.storeId });
+            if (!storefront?.draftSchema) {
+                return res.status(200).json({ success: true, data: { valid: false, issues: [{ message: 'No storefront design imported.' }] } });
+            }
+            const checklist = validatePublishBindings(storefront.draftSchema);
+            res.status(200).json({ success: true, data: checklist });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
     /**
      * Publish the active draft configuration to the live web storefront
      */
@@ -873,6 +1041,26 @@ class ManagedStorefrontController {
                 return res.status(404).json({ success: false, message: 'Storefront not found' });
             }
             const store = await Store.findById(req.storeId);
+
+            const mappings = await StorefrontMapping.find({
+                storeId: req.storeId,
+                designImportId: storefront.designImportId,
+            });
+            storefront.draftSchema.mappings = mappings;
+            applyMappingsToSchema(storefront.draftSchema, mappings);
+            autoBindProductGrids(storefront.draftSchema);
+
+            const checklist = validatePublishBindings(storefront.draftSchema);
+            if (req.body.strict !== false && !checklist.valid) {
+                return res.status(422).json({
+                    success: false,
+                    message: 'Required commerce bindings are missing.',
+                    checklist,
+                });
+            }
+
+            await this.syncCommerceBindings(storefront);
+
             storefront.draftSchema = applyRouteMapToSchema(storefront.draftSchema, store?.storeSlug || '');
             storefront.publishedSchema = applyRouteMapToSchema(
                 JSON.parse(JSON.stringify(storefront.draftSchema || {})),

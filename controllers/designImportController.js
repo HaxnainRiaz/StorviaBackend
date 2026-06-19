@@ -11,6 +11,12 @@ const StorefrontVersion = require('../models/StorefrontVersion');
 const Store = require('../models/Store');
 const { createLog } = require('./auditController');
 const { applyRouteMapToSchema, classifyPageType } = require('../utils/storefrontRouteMap');
+const {
+    applyMappingsToSchema,
+    autoBindProductGrids,
+    targetTypeToComponentType,
+    sectionMatchesSelector,
+} = require('../utils/commerceBindings');
 
 const ALLOWED_EXT = ['.html', '.css', '.png', '.jpg', '.jpeg', '.webp', '.svg', '.woff', '.woff2', '.ttf', '.json'];
 const REJECTED_EXT = ['.js', '.mjs', '.ts', '.tsx', '.jsx', '.php', '.py', '.rb', '.exe', '.bat', '.sh', '.cmd', '.env', '.sql', '.zip'];
@@ -132,6 +138,7 @@ class DesignImportController {
             }
 
             const schema = await this.parseAndBuildSchema(designRoot, req.storeId, designImport._id);
+            autoBindProductGrids(schema);
 
             // Update or create ManagedStorefront
             const storefront = await ManagedStorefront.findOneAndUpdate(
@@ -485,17 +492,8 @@ class DesignImportController {
                 const schema = storefront.draftSchema;
                 schema.mappings = saved;
                 
-                // Re-sync dynamic components binding in draftSchema pages
-                for (const page of schema.pages) {
-                    for (const section of page.sections) {
-                        const matchedMap = saved.find(m => m.targetType === section.targetType);
-                        if (matchedMap) {
-                            section.type = this.targetTypeToComponentType(matchedMap.targetType);
-                            section.source = 'storvia';
-                            section.selector = matchedMap.sourceSelector;
-                        }
-                    }
-                }
+                applyMappingsToSchema(schema, saved);
+                autoBindProductGrids(schema);
                 
                 storefront.draftSchema = schema;
                 storefront.markModified('draftSchema');
@@ -534,6 +532,14 @@ class DesignImportController {
             }
 
             const store = await Store.findById(req.storeId);
+
+            const mappings = await StorefrontMapping.find({
+                storeId: req.storeId,
+                designImportId: storefront.designImportId,
+            });
+            storefront.draftSchema.mappings = mappings;
+            applyMappingsToSchema(storefront.draftSchema, mappings);
+            autoBindProductGrids(storefront.draftSchema);
 
             // Promote draft to published with normalized Storvia routing
             storefront.draftSchema = applyRouteMapToSchema(storefront.draftSchema, store?.storeSlug || '');
@@ -1330,21 +1336,7 @@ class DesignImportController {
     }
 
     targetTypeToComponentType(targetType) {
-        const mapping = {
-            Header: 'dynamic_header',
-            Logo: 'dynamic_logo',
-            Navigation: 'dynamic_navigation',
-            Hero: 'dynamic_hero',
-            ProductGrid: 'dynamic_product_grid',
-            FeaturedProducts: 'dynamic_featured_products',
-            CollectionLinks: 'dynamic_collections',
-            CartButton: 'dynamic_cart_button',
-            SearchButton: 'dynamic_search_button',
-            Footer: 'dynamic_footer',
-            ContactSection: 'dynamic_contact',
-            PolicyLinks: 'dynamic_policies'
-        };
-        return mapping[targetType] || 'static_or_mapped';
+        return targetTypeToComponentType(targetType);
     }
 
     getMimeTypeFromExt(ext) {

@@ -19,7 +19,7 @@ const { queueMetaEvent } = require('../services/metaQueueService');
 const { createStoreNotification } = require('../services/storeNotificationService');
 
 
-const publicProductProjection = 'title slug description images price salePrice stock category tags concerns isFeatured isBestSeller rating totalReviews metaTitle metaDescription sku warranty returnEligible specifications faqs imageAltText';
+const publicProductProjection = 'title slug description images price salePrice stock category tags isFeatured isBestSeller isNewArrival productType rating totalReviews metaTitle metaDescription sku warranty returnEligible specifications faqs imageAltText';
 
 const ensurePublishedStore = (req, res) => {
     if (req.publicStore.status !== 'published') {
@@ -155,6 +155,7 @@ exports.getCollection = async (req, res) => {
             if (rule.field === 'stock' && rule.operator === 'available') filter.stock = { $gt: 0 };
             if (rule.field === 'featured' && rule.operator === 'true') filter.isFeatured = true;
             if (rule.field === 'bestseller' && rule.operator === 'true') filter.isBestSeller = true;
+            if (rule.field === 'new_arrival' && rule.operator === 'true') filter.isNewArrival = true;
         }
     }
 

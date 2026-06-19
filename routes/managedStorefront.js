@@ -118,6 +118,22 @@ router.patch('/seo', (req, res, next) => {
     managedStorefrontCtrl.updateSeo(req, res, next);
 });
 
+router.get('/commerce-bindings', (req, res, next) => {
+    managedStorefrontCtrl.getCommerceBindings(req, res, next);
+});
+
+router.patch('/commerce-bindings', (req, res, next) => {
+    managedStorefrontCtrl.updateCommerceBindings(req, res, next);
+});
+
+router.post('/commerce-bindings/auto-detect', (req, res, next) => {
+    managedStorefrontCtrl.autoDetectCommerceBindings(req, res, next);
+});
+
+router.get('/publish-checklist', (req, res, next) => {
+    managedStorefrontCtrl.getPublishChecklist(req, res, next);
+});
+
 router.post('/publish', (req, res, next) => {
     managedStorefrontCtrl.publishStorefront(req, res, next);
 });

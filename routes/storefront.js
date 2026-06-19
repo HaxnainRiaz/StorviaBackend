@@ -6,6 +6,8 @@ const storefront = require('../controllers/storefrontController');
 const ManagedStorefront = require('../models/ManagedStorefront');
 const StorefrontAsset = require('../models/StorefrontAsset');
 const { applyRouteMapToSchema } = require('../utils/storefrontRouteMap');
+const StorefrontMapping = require('../models/StorefrontMapping');
+const { applyMappingsToSchema, autoBindProductGrids } = require('../utils/commerceBindings');
 
 const router = express.Router();
 
@@ -83,10 +85,19 @@ router.get('/:storeSlug/render-schema', async (req, res) => {
         if (!managed || !schema || (!isPreview && managed.status !== 'published')) {
             return res.json({ success: true, data: null, managed: false });
         }
-        applyRouteMapToSchema(schema, req.store?.storeSlug || req.params.storeSlug);
+
+        const schemaCopy = JSON.parse(JSON.stringify(schema));
+        const mappings = await StorefrontMapping.find({
+            storeId: req.storeId,
+            designImportId: managed.designImportId,
+        }).lean();
+        schemaCopy.mappings = mappings;
+        applyMappingsToSchema(schemaCopy, mappings);
+        autoBindProductGrids(schemaCopy);
+        applyRouteMapToSchema(schemaCopy, req.store?.storeSlug || req.params.storeSlug);
 
         // ── Rebuild scopedCss on-the-fly if empty (for schemas built before the CSS fix) ──
-        if (!schema.scopedCss || schema.scopedCss.trim() === '') {
+        if (!schemaCopy.scopedCss || schemaCopy.scopedCss.trim() === '') {
             try {
                 const cssAssets = await StorefrontAsset.find({
                     storeId: req.storeId,
@@ -132,7 +143,7 @@ router.get('/:storeSlug/render-schema', async (req, res) => {
                     }
 
                     if (combinedCss) {
-                        schema.scopedCss = combinedCss;
+                        schemaCopy.scopedCss = combinedCss;
                         // Also patch the stored schema async (fire-and-forget) so next load is fast
                         const updateField = isPreview ? 'draftSchema.scopedCss' : 'publishedSchema.scopedCss';
                         ManagedStorefront.updateOne(
@@ -146,7 +157,7 @@ router.get('/:storeSlug/render-schema', async (req, res) => {
             }
         }
 
-        res.json({ success: true, data: schema, managed: true, preview: Boolean(isPreview), version: managed.version });
+        res.json({ success: true, data: schemaCopy, managed: true, preview: Boolean(isPreview), version: managed.version });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
